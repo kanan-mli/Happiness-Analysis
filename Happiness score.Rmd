@@ -1,0 +1,264 @@
+---
+title: "statc"
+author: "Kanan Mammadli"
+date: "1/11/2022"
+output:
+  pdf_document: default
+  html_document: default
+editor_options:
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(tidyverse)
+library(dplyr)
+install.packages("caret", dependencies = c("Depends", "Suggests"))
+library(caret)
+library(ggplot2)
+library(gridExtra)
+```
+
+
+
+```{r}
+happiness <- read.csv("2015.csv")
+head(happiness)
+str(happiness)
+sum(is.na(happiness))
+summary(happiness)
+```
+
+
+Explatory Data Analysis (EDA)
+
+here our reponse variable is "Score" and rest of them are explotory variables.
+
+```{r}
+ggplot(happiness)+
+  geom_histogram(mapping=aes(HappinessScore, color = 8))
+```
+
+```{r}
+ggplot(happiness, aes(GovernmentCorruption,GDPperCapita,color = 5)) +
+  geom_point(shape = 16, size =2, show.legend = FALSE) +
+  theme_minimal() +
+  scale_color_gradient(low = "#0091ff", high = "#f0650e")
+
+```
+as we can see, there is almost no relationship between Corruption and GDP in 2015. even some highly corropted countries have huge GDP per capita.
+
+#Low Corruption rate and high GDP
+```{r}
+happiness %>%
+  select(Country, GDPperCapita, GovernmentCorruption)%>%
+  group_by(GovernmentCorruption)%>%
+  arrange(desc(GovernmentCorruption))
+
+```
+Rwanda, Qatar, Singapore,Denmark, Sweden are countries that with the highest GDP per capita and the lowest corruption rate.
+
+
+```{r}
+ggplot(happiness) +
+  geom_point(aes(Freedom, GovernmentCorruption, color=2))
+```
+but here we can see that, there is slightlt high relationship between Freedom and 
+Goverment Corruption rate.
+
+Our distribution seems like normal
+
+```{r}
+
+average.happy.region <-happiness %>%
+        group_by(Region) %>%          
+        summarise(avg_happiness = mean(HappinessScore, round(1)))
+average.happy.region<- average.happy.region %>% arrange(desc(avg_happiness))
+ggplot(average.happy.region)+
+  geom_bar(aes(x= Region ,y=avg_happiness),stat="identity",color=7)+
+  coord_flip()
+
+```
+
+We can see average happiness score by regions and it's clearly seen that Western European and Austrailian people are the happiness.
+
+
+
+```{r}
+up10_2015<-happiness %>% select(Country,Region,HappinessRank,HappinessScore) %>% head(n=10)
+bottom10_2015<-happiness %>% select(Country,Region,HappinessRank,HappinessScore) %>% tail(n=10)
+
+g1<-ggplot(up10_2015,aes(x=factor(Country,levels=Country),y=HappinessScore))+geom_bar(stat="identity",width=0.5,fill="navyblue")+theme(axis.text.x = element_text(angle=90, vjust=0.6))+labs(title="Most 10 Happy Countries-2015",x="Country",y="Score")+coord_flip()
+g2<-ggplot(bottom10_2015,aes(x=factor(Country,levels=Country),y=HappinessScore))+geom_bar(stat="identity",width=0.5,fill="darkred")+theme(axis.text.x = element_text(angle=90, vjust=0.6))+labs(title="Top 10 unhappy Countries-2015",x="Country",y="Score")+coord_flip()
+grid.arrange(g1, g2,  ncol = 2,nrow=1)
+```
+
+This plot visualise which countries are happiest and which are less happies in 2015. We gonna reasech which factors are impact their happiness.
+
+
+
+```{r}
+
+```
+
+
+
+#correlation matrix
+
+```{r}
+corr_matrix <- round(cor(happiness[,!(colnames(happiness) %in% c("Country", "Region","HappinessRank","StandardError"))]), 2)
+corr_matrix[lower.tri(corr_matrix)] <- 0
+corr_matrix
+
+```
+
+# Correlogram
+
+```{r}
+library(ggcorrplot)                                             
+ggcorrplot(corr_matrix, type = "upper", lab = T, lab_size = 3, outline.col = "white", 
+           colors = c("tomato2", "white", "springgreen3"), title = "", ggtheme = theme_gray, 
+           p.mat = cor_pmat(corr_matrix), pch.cex = 30, tl.cex = 10)
+```
+
+we can clearly see that there is some correlation between HappinessScore with LifeExpectency, Family, GDPpercapita. And also there is also strong postive relationship between LifeExp and GdpPercap. Normally we have to drop highly correlated variables but, we gonna see that these are highly significant values for  our model.
+
+
+
+#Model we use:
+first: Multiple Linear Regression
+
+train and test our data
+
+```{r}
+n <- nrow(happiness)
+size <- round(0.75 * n)
+set.seed(666)
+row.ind <- sample(x = 1:n, size = size) 
+train_hp <- happiness[row.ind,]
+test_hp <- happiness[-row.ind,]
+
+```
+
+```{r}
+str(train_hp)
+```
+
+```{r}
+## The model ##
+linear_fit1 <- lm(HappinessScore ~GDPperCapita+Family+ LifeExpectancy+ Freedom+GovernmentCorruption +Generosity, data = train_hp)
+```
+
+#model summary
+```{r}
+predict_linear1_test <- linear_fit1 %>% predict(test_hp)
+
+summary(predict_linear1_test)
+
+AIC(linear_fit1)
+BIC(linear_fit1)
+RMSE(linear_fit1)
+MAE(linear_fit1)
+
+```
+
+Under H0 → the explanatory variable does not have any effect on Y
+Under H1 → the explanatory variable does have an effect on Y
+
+#second model 
+
+
+```{r}
+linear_fit2 <- lm(HappinessScore ~GDPperCapita+Family+ LifeExpectancy+ Freedom, data = train_hp)
+
+predict_linear1_test <- linear_fit2 %>% predict(test_hp)
+
+summary(linear_fit2)
+
+```
+
+
+```{r}
+par(mfrow = c(2,2))
+plot(linear_fit2)
+
+par(mfrow = c(2,2))
+plot(linear_fit1)
+```
+
+as we see droping some unsignifcant variables has negative effect to our model, because our Adjusted R square decreased about 1%. So we gonna continue with first model.
+
+we also understood that GDP per capita is the most important varible that effect Happines score and linear regression significalty explain realtionship among Y and gdp per capita. Therefore we plot Life Expectence for see relationship with Happines score and we gonna see realtionship among them is not so linear. Therefore we gonna try next polynomial regression Life Expectence as predictor and HAppiness score as response variable.
+
+
+#polynomial regression
+
+
+```{r}
+ggplot(data = happiness) +
+  geom_point(mapping = aes(x= LifeExpectancy , y =HappinessScore))
+```
+
+
+```{r}
+cverror <- numeric(5)
+degrees <- 1:5
+for(i in degrees){
+  train_control <- trainControl(method = 'LOOCV')
+  f <- bquote(HappinessScore ~ poly(LifeExpectancy, .(i), raw = TRUE))
+  models <- train(as.formula(f), 
+                  data = train_hp, 
+                  trControl = train_control, 
+                  method = 'lm')
+  cverror[i] <- (models$results$RMSE)^2
+}
+# -- Print d and MSE
+cbind(degrees, cverror)
+```
+
+we would continue with 2nd d because we can see really nice drop from 1st degree to second one.
+
+```{r}
+d_opt <- 2
+model.poly <- lm(HappinessScore ~ poly(LifeExpectancy, d_opt), data = train_hp)
+summary(model.poly)
+anova(linear_fit1,model.poly)
+```
+
+
+#plotting
+
+```{r}
+# -- The plot
+ggplot(train_hp, aes(x = LifeExpectancy, y = HappinessScore) ) +
+  geom_point(pch = 17, size = 2, col = "darkorange2") +
+  labs(x = "percentage of Life Expectency",
+       y = "Happiness Score") + 
+  theme(axis.title.y = element_text(vjust = 3.5),
+        axis.title.x = element_text(vjust = -1.5)) + 
+  stat_smooth(method = lm, formula = y ~ poly(x, d_opt))
+```
+
+Since coefficients in polynomial regression can be estimated easily using ordinary least squares for a multiple linear regression, the interpretation is as before: every βj of the final model represents the average effect of a one-unit increase in lstatj on medv, holding all other predictors fixed.
+
+```{r}
+summary(model.poly)
+pred.poly <- model.poly %>% predict(test_hp)
+summary(pred.poly)
+```
+
+
+```{r}
+performance.poly <- data.frame(
+  AIC = round(AIC(model.poly),4),
+  BIC = round(BIC(model.poly),4),
+  RMSE = RMSE(pred = pred.poly, obs = test_hp$HappinessScore),
+  R2 = R2(pred = pred.poly, obs = test_hp$HappinessScore),
+  MAE = MAE(pred = pred.poly, obs = test_hp$HappinessScore)
+)
+performance.poly
+```
+
